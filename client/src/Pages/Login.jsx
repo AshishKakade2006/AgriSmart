@@ -7,7 +7,7 @@ import api from "../services/api";
 import toast, { Toaster } from "react-hot-toast";
 import { useNavigate } from "react-router-dom";
 
-import { useAuth } from "../context/AuthContext";
+import { useAuth } from "../Context/authContext";
 
 
 

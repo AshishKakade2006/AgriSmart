@@ -1,5 +1,5 @@
 import { Bell, Leaf } from "lucide-react";
-import { useAuth } from "../context/AuthContext";
+import { useAuth } from "../Context/authContext";
 
 const Navbar = () => {
   const { user } = useAuth();
