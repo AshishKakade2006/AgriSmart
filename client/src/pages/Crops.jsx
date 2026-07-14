@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import DashboardLayout from "../components/DashboardLayout";
 import { getMyCrops } from "../services/cropService";
-import CropCard from "../components/CropCard";
+import CropCard from "../components/Cropcard";
 import toast from "react-hot-toast";
 
 const Crops = () => {
