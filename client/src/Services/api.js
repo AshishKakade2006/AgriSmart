@@ -1,8 +1,10 @@
 import axios from "axios";
 
-const api = axios.create({
-  baseURL: import.meta.env.VITE_API_URL,
-  withCredentials: false,
+const API = axios.create({
+  baseURL: "https://agrismart-backend-kfzb.onrender.com/api",
+  headers: {
+    "Content-Type": "application/json",
+  },
 });
 
-export default api;
+export default API;
