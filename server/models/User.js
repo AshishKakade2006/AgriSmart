@@ -26,6 +26,25 @@ const userSchema = new mongoose.Schema(
       enum: ["farmer", "buyer"],
       default: "farmer",
     },
+    phone: {
+  type: String,
+  default: "",
+},
+
+farmLocation: {
+  type: String,
+  default: "",
+},
+
+farmSize: {
+  type: Number,
+  default: 0,
+},
+
+profileImage: {
+  type: String,
+  default: "",
+},
   },
   {
     timestamps: true,
