@@ -1,14 +1,14 @@
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 
-import Login from "./Pages/Login";
-import Register from "./Pages/Register";
-import Dashboard from "./Pages/Dashboard";
-import Crops from "./Pages/Crops";
-import AddCrop from "./Pages/AddCrop";
-import EditCrop from "./Pages/EditCrop";
-import Analytics from "./Pages/Analytics";
-import Profile from "./Pages/Profile";
-import DiseaseDetection from "./Pages/DiseaseDetection";
+import Login from "./pages/Login";
+import Register from "./pages/Register";
+import Dashboard from "./pages/Dashboard";
+import Crops from "./pages/Crops";
+import AddCrop from "./pages/AddCrop";
+import EditCrop from "./pages/EditCrop";
+import Analytics from "./pages/Analytics";
+import Profile from "./pages/Profile";
+import DiseaseDetection from "./pages/DiseaseDetection";
 
 function App() {
   return (
