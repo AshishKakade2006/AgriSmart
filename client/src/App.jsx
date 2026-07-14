@@ -3,7 +3,7 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 import Login from "./pages/Login";
 import Register from "./pages/Register";
 import Dashboard from "./pages/Dashboard";
-import Crops from "./Pages/Crops";
+import Crops from "./pages/Crops";
 import AddCrop from "./pages/AddCrop";
 import EditCrop from "./pages/EditCrop";
 import Analytics from "./pages/Analytics";
