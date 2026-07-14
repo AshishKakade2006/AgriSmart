@@ -9,7 +9,7 @@ import {
 } from "lucide-react";
 
 import { NavLink, useNavigate } from "react-router-dom";
-import { useAuth } from "../Context/authContext";
+import { useAuth } from "../context/authContext";
 
 const Sidebar = () => {
 
