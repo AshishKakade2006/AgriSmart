@@ -14,7 +14,9 @@ const detectDisease = async (req, res) => {
         message: "Please upload an image.",
       });
     }
-
+console.log("Uploaded file:", req.file);
+console.log("Path:", req.file.path);
+console.log("Exists:", fs.existsSync(req.file.path));
     const imageBuffer = fs.readFileSync(req.file.path);
 
     const prompt = `
