@@ -17,7 +17,7 @@ const detectDisease = async (req, res) => {
 console.log("Uploaded file:", req.file);
 console.log("Path:", req.file.path);
 console.log("Exists:", fs.existsSync(req.file.path));
-    const imageBuffer = fs.readFileSync(req.file.path);
+    const imageBuffer = req.file.buffer;
 
     const prompt = `
 You are an expert agricultural scientist.
