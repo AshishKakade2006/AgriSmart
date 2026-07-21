@@ -1,20 +1,50 @@
 import { useEffect, useState } from "react";
 import { CloudSun, Droplets, Wind } from "lucide-react";
 import { getWeather } from "../services/weatherService";
+import { getMyCrops } from "../services/cropService";
+import { useAuth } from "../context/authContext";
 
 const WeatherCard = () => {
   const [weather, setWeather] = useState(null);
+  const [location, setLocation] = useState("Pune"); // Default fallback
+  const { user } = useAuth();
 
   useEffect(() => {
-    fetchWeather();
+    fetchUserLocation();
   }, []);
+
+  useEffect(() => {
+    if (location) {
+      fetchWeather();
+    }
+  }, [location]);
+
+  const fetchUserLocation = async () => {
+    try {
+      // Try to get user's crops to find their location
+      const response = await getMyCrops();
+      
+      if (response.data?.crops && response.data.crops.length > 0) {
+        // Get location from the first crop
+        const userLocation = response.data.crops[0].location;
+        setLocation(userLocation);
+      } else {
+        // Fallback to Pune if no crops found
+        setLocation("Pune");
+      }
+    } catch (error) {
+      console.log("Error fetching user location:", error);
+      // Use default if fetch fails
+      setLocation("Pune");
+    }
+  };
 
   const fetchWeather = async () => {
     try {
-      const data = await getWeather("Pune");
+      const data = await getWeather(location);
       setWeather(data.weather);
     } catch (error) {
-      console.log(error);
+      console.log("Error fetching weather:", error);
     }
   };
 
