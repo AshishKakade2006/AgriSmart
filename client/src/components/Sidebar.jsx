@@ -11,7 +11,7 @@ import {
 import { NavLink, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/authContext";
 
-const Sidebar = () => {
+const Sidebar = ({ onClose, isMobile }) => {
 
   const navigate = useNavigate();
   const { logout } = useAuth();
@@ -55,7 +55,8 @@ const Sidebar = () => {
   ];
 
   return (
-    <aside className="w-64 min-h-[calc(100vh-64px)] bg-white border-r">
+    // On mobile, show overlay panel when opened; on md+ show static sidebar
+    <aside className={`bg-white border-r ${isMobile ? "fixed inset-y-16 left-0 z-40 w-64" : "w-64 min-h-[calc(100vh-64px)]"}`}>
 
       <nav className="p-5 space-y-2">
 
@@ -64,6 +65,7 @@ const Sidebar = () => {
           <NavLink
             key={menu.name}
             to={menu.path}
+            onClick={onClose}
             className={({ isActive }) =>
               `flex items-center gap-3 px-4 py-3 rounded-xl transition ${
                 isActive

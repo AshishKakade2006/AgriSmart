@@ -9,7 +9,14 @@ import { Toaster } from "react-hot-toast";
 ReactDOM.createRoot(document.getElementById("root")).render(
   <React.StrictMode>
     <AuthProvider>
-      <Toaster position="top-right" />
+      <Toaster
+        position="top-right"
+        toastOptions={{
+          // Default toast options
+          duration: 4000,
+          style: { fontSize: "14px" },
+        }}
+      />
       <App />
     </AuthProvider>
   </React.StrictMode>

@@ -6,17 +6,40 @@ const WeatherCard = () => {
   const [weather, setWeather] = useState(null);
 
   useEffect(() => {
-    fetchWeather();
-  }, []);
-
-  const fetchWeather = async () => {
-    try {
-      const data = await getWeather("Pune");
-      setWeather(data.weather);
-    } catch (error) {
-      console.log(error);
+    // Try browser geolocation first for accurate local weather
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        async (position) => {
+          const { latitude, longitude } = position.coords;
+          try {
+            const data = await getWeather({ lat: latitude, lon: longitude });
+            setWeather(data.weather);
+          } catch (error) {
+            console.error("Error fetching weather by coords:", error);
+          }
+        },
+        // on error or denial fallback to a default city
+        async () => {
+          try {
+            const data = await getWeather({ city: "Pune" });
+            setWeather(data.weather);
+          } catch (error) {
+            console.error("Error fetching default weather:", error);
+          }
+        }
+      );
+    } else {
+      // Geolocation unsupported — fallback
+      (async () => {
+        try {
+          const data = await getWeather({ city: "Pune" });
+          setWeather(data.weather);
+        } catch (error) {
+          console.error("Error fetching default weather:", error);
+        }
+      })();
     }
-  };
+  }, []);
 
   if (!weather) {
     return (
