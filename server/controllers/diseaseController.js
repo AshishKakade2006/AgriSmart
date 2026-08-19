@@ -1,5 +1,5 @@
-const fs = require("fs");
 const { GoogleGenAI } = require("@google/genai");
+const DiseaseScan = require("../models/DiseaseScan");
 
 console.log(
   "Gemini Key exists:",
@@ -88,7 +88,6 @@ If the plant is healthy, return:
     // Clean Gemini's response
     let cleanedText = text.trim();
 
-    // Remove ```json and ``` if Gemini adds them
     cleanedText = cleanedText
       .replace(/^```json\s*/i, "")
       .replace(/^```\s*/i, "")
@@ -100,6 +99,18 @@ If the plant is healthy, return:
 
     // Convert JSON string into JavaScript object
     const result = JSON.parse(cleanedText);
+
+    // Save disease detection history
+    await DiseaseScan.create({
+      farmer: req.user.id,
+      crop: "Unknown",
+      disease: result.disease,
+      confidence: result.confidence,
+      severity: result.severity,
+      recommendation: result.treatment?.join(" ") || "",
+    });
+
+    console.log("Disease scan saved successfully.");
 
     return res.status(200).json({
       success: true,
