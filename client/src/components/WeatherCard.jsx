@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
-import { CloudSun, Droplets, Wind } from "lucide-react";
+import { Droplets, Wind } from "lucide-react";
 import { getWeather } from "../services/weatherService";
+import { getProfile } from "../services/profileService";
 
 const WeatherCard = () => {
   const [weather, setWeather] = useState(null);
@@ -11,10 +12,18 @@ const WeatherCard = () => {
 
   const fetchWeather = async () => {
     try {
-      const data = await getWeather("Pune");
+      // Get the logged-in farmer's profile
+      const profile = await getProfile();
+
+      // Get the farmer's farm location
+      const location = profile.data.user.farmLocation;
+
+      // Get weather for that location
+      const data = await getWeather(location);
+
       setWeather(data.weather);
     } catch (error) {
-      console.log(error);
+      console.log("Error fetching weather:", error);
     }
   };
 
