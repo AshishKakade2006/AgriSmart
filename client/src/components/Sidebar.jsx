@@ -6,13 +6,13 @@ import {
   User,
   LogOut,
   ScanSearch,
+  History,
 } from "lucide-react";
 
 import { NavLink, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/authContext";
 
 const Sidebar = () => {
-
   const navigate = useNavigate();
   const { logout } = useAuth();
 
@@ -48,19 +48,22 @@ const Sidebar = () => {
       path: "/profile",
     },
     {
-  name: "Disease Detection",
-  icon: <ScanSearch size={20} />,
-  path: "/disease",
-},
+      name: "Disease Detection",
+      icon: <ScanSearch size={20} />,
+      path: "/disease",
+    },
+    {
+      name: "Disease History",
+      icon: <History size={20} />,
+      path: "/disease-history",
+    },
   ];
 
   return (
     <aside className="w-64 min-h-[calc(100vh-64px)] bg-white border-r">
-
       <nav className="p-5 space-y-2">
 
         {menus.map((menu) => (
-
           <NavLink
             key={menu.name}
             to={menu.path}
@@ -73,11 +76,8 @@ const Sidebar = () => {
             }
           >
             {menu.icon}
-
             {menu.name}
-
           </NavLink>
-
         ))}
 
         <button
@@ -85,13 +85,10 @@ const Sidebar = () => {
           className="flex items-center gap-3 px-4 py-3 rounded-xl w-full hover:bg-red-100 mt-10"
         >
           <LogOut size={20} />
-
           Logout
-
         </button>
 
       </nav>
-
     </aside>
   );
 };

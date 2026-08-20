@@ -9,6 +9,7 @@ import EditCrop from "./pages/EditCrop";
 import Analytics from "./pages/Analytics";
 import Profile from "./pages/Profile";
 import DiseaseDetection from "./pages/DiseaseDetection";
+import DiseaseHistory from "./pages/DiseaseHistory";
 
 function App() {
   return (
@@ -23,6 +24,7 @@ function App() {
         <Route path="/analytics" element={<Analytics />} />
         <Route path="/profile" element={<Profile />} />
         <Route path="/disease" element={<DiseaseDetection />} />
+        <Route path="/disease-history" element={<DiseaseHistory />} />
       </Routes>
     </BrowserRouter>
   );
