@@ -7,18 +7,24 @@ import {
   LogOut,
   ScanSearch,
   History,
+  X,
 } from "lucide-react";
 
 import { NavLink, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/authContext";
 
-const Sidebar = () => {
+const Sidebar = ({ isOpen = true, onClose = () => {} }) => {
   const navigate = useNavigate();
   const { logout } = useAuth();
 
   const handleLogout = () => {
     logout();
     navigate("/login");
+    onClose();
+  };
+
+  const handleNavClick = () => {
+    onClose();
   };
 
   const menus = [
@@ -60,36 +66,70 @@ const Sidebar = () => {
   ];
 
   return (
-    <aside className="w-64 min-h-[calc(100vh-64px)] bg-white border-r">
-      <nav className="p-5 space-y-2">
+    <>
+      <div
+        className={
+          isOpen
+            ? "fixed inset-0 z-30 bg-slate-900/40 backdrop-blur-sm lg:hidden"
+            : "hidden"
+        }
+        onClick={onClose}
+        aria-hidden="true"
+      />
 
-        {menus.map((menu) => (
-          <NavLink
-            key={menu.name}
-            to={menu.path}
-            className={({ isActive }) =>
-              `flex items-center gap-3 px-4 py-3 rounded-xl transition ${
-                isActive
-                  ? "bg-emerald-600 text-white"
-                  : "hover:bg-emerald-100"
-              }`
-            }
+      <aside
+        className={
+          `fixed inset-y-0 left-0 z-40 w-72 bg-white border-r border-slate-200 shadow-xl transition-transform duration-300 ease-in-out lg:static lg:translate-x-0 lg:shadow-none lg:border-r ${
+            isOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"
+          }`
+        }
+      >
+        <div className="flex items-center justify-between border-b border-slate-200 px-5 py-4 lg:hidden">
+          <div className="flex items-center gap-2">
+            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-emerald-100 text-emerald-700">
+              <Sprout size={18} />
+            </div>
+            <span className="text-lg font-bold text-emerald-700">AgriSmart</span>
+          </div>
+
+          <button
+            onClick={onClose}
+            className="rounded-lg p-2 text-slate-500 hover:bg-slate-100 hover:text-slate-700"
+            aria-label="Close menu"
           >
-            {menu.icon}
-            {menu.name}
-          </NavLink>
-        ))}
+            <X size={18} />
+          </button>
+        </div>
 
-        <button
-          onClick={handleLogout}
-          className="flex items-center gap-3 px-4 py-3 rounded-xl w-full hover:bg-red-100 mt-10"
-        >
-          <LogOut size={20} />
-          Logout
-        </button>
+        <nav className="space-y-2 p-4 lg:min-h-[calc(100vh-64px)] lg:p-5">
+          {menus.map((menu) => (
+            <NavLink
+              key={menu.name}
+              to={menu.path}
+              onClick={handleNavClick}
+              className={({ isActive }) =>
+                `flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-medium transition ${
+                  isActive
+                    ? "bg-emerald-600 text-white shadow-sm"
+                    : "text-slate-700 hover:bg-emerald-50 hover:text-emerald-700"
+                }`
+              }
+            >
+              {menu.icon}
+              {menu.name}
+            </NavLink>
+          ))}
 
-      </nav>
-    </aside>
+          <button
+            onClick={handleLogout}
+            className="mt-10 flex w-full items-center gap-3 rounded-xl px-4 py-3 text-sm font-medium text-slate-700 transition hover:bg-red-50 hover:text-red-600"
+          >
+            <LogOut size={20} />
+            Logout
+          </button>
+        </nav>
+      </aside>
+    </>
   );
 };
 
