@@ -1,4 +1,5 @@
 const { GoogleGenAI } = require("@google/genai");
+
 const DiseaseScan = require("../models/DiseaseScan");
 
 console.log(
@@ -10,8 +11,13 @@ const ai = new GoogleGenAI({
   apiKey: process.env.GEMINI_API_KEY,
 });
 
+
+// ===============================
+// Detect Disease
+// ===============================
 const detectDisease = async (req, res) => {
   try {
+    // Check if image was uploaded
     if (!req.file) {
       return res.status(400).json({
         success: false,
@@ -25,14 +31,18 @@ const detectDisease = async (req, res) => {
 
     const imageBuffer = req.file.buffer;
 
+    // Gemini prompt
     const prompt = `
 You are an expert agricultural scientist.
 
 Analyze this crop image and identify any visible disease.
 
 Return ONLY a JSON object.
+
 Do NOT use markdown.
+
 Do NOT use \`\`\`json.
+
 Do NOT add any explanation before or after the JSON.
 
 Use exactly this format:
@@ -64,6 +74,7 @@ If the plant is healthy, return:
 }
 `;
 
+    // Send image to Gemini
     const response = await ai.models.generateContent({
       model: "gemini-flash-latest",
 
@@ -71,6 +82,7 @@ If the plant is healthy, return:
         {
           text: prompt,
         },
+
         {
           inlineData: {
             mimeType: req.file.mimetype,
@@ -85,9 +97,13 @@ If the plant is healthy, return:
     console.log("Raw Gemini Response:");
     console.log(text);
 
-    // Clean Gemini's response
+    // ===============================
+    // Clean Gemini Response
+    // ===============================
+
     let cleanedText = text.trim();
 
+    // Remove markdown code fences if Gemini adds them
     cleanedText = cleanedText
       .replace(/^```json\s*/i, "")
       .replace(/^```\s*/i, "")
@@ -97,10 +113,16 @@ If the plant is healthy, return:
     console.log("Cleaned Response:");
     console.log(cleanedText);
 
-    // Convert JSON string into JavaScript object
+    // ===============================
+    // Convert JSON string to object
+    // ===============================
+
     const result = JSON.parse(cleanedText);
 
-    // Save disease detection history
+    // ===============================
+    // Save Disease History
+    // ===============================
+
     await DiseaseScan.create({
       farmer: req.user.id,
       crop: "Unknown",
@@ -111,6 +133,10 @@ If the plant is healthy, return:
     });
 
     console.log("Disease scan saved successfully.");
+
+    // ===============================
+    // Send Result to Frontend
+    // ===============================
 
     return res.status(200).json({
       success: true,
@@ -128,6 +154,40 @@ If the plant is healthy, return:
   }
 };
 
+
+// ===============================
+// Get Disease History
+// ===============================
+const getDiseaseHistory = async (req, res) => {
+  try {
+    const history = await DiseaseScan.find({
+      farmer: req.user.id,
+    }).sort({
+      createdAt: -1,
+    });
+
+    return res.status(200).json({
+      success: true,
+      history,
+    });
+
+  } catch (err) {
+    console.error("History Error:");
+    console.error(err);
+
+    return res.status(500).json({
+      success: false,
+      message: "Failed to fetch disease history",
+    });
+  }
+};
+
+
+// ===============================
+// Export Controllers
+// ===============================
+
 module.exports = {
   detectDisease,
+  getDiseaseHistory,
 };
