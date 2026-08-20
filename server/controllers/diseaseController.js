@@ -15,8 +15,10 @@ const ai = new GoogleGenAI({
 // ===============================
 // Detect Disease
 // ===============================
+
 const detectDisease = async (req, res) => {
   try {
+
     // Check if image was uploaded
     if (!req.file) {
       return res.status(400).json({
@@ -31,7 +33,11 @@ const detectDisease = async (req, res) => {
 
     const imageBuffer = req.file.buffer;
 
-    // Gemini prompt
+
+    // ===============================
+    // Gemini Prompt
+    // ===============================
+
     const prompt = `
 You are an expert agricultural scientist.
 
@@ -62,6 +68,8 @@ Use exactly this format:
   ]
 }
 
+For confidence, return a percentage such as "94%".
+
 If the plant is healthy, return:
 
 {
@@ -74,7 +82,11 @@ If the plant is healthy, return:
 }
 `;
 
-    // Send image to Gemini
+
+    // ===============================
+    // Send Image to Gemini
+    // ===============================
+
     const response = await ai.models.generateContent({
       model: "gemini-flash-latest",
 
@@ -92,10 +104,16 @@ If the plant is healthy, return:
       ],
     });
 
+
+    // ===============================
+    // Gemini Response
+    // ===============================
+
     const text = response.text;
 
     console.log("Raw Gemini Response:");
     console.log(text);
+
 
     // ===============================
     // Clean Gemini Response
@@ -103,7 +121,6 @@ If the plant is healthy, return:
 
     let cleanedText = text.trim();
 
-    // Remove markdown code fences if Gemini adds them
     cleanedText = cleanedText
       .replace(/^```json\s*/i, "")
       .replace(/^```\s*/i, "")
@@ -113,11 +130,36 @@ If the plant is healthy, return:
     console.log("Cleaned Response:");
     console.log(cleanedText);
 
+
     // ===============================
-    // Convert JSON string to object
+    // Convert JSON String to Object
     // ===============================
 
     const result = JSON.parse(cleanedText);
+
+
+    // ===============================
+    // Convert Confidence to Number
+    // ===============================
+
+    let confidence = parseFloat(
+      String(result.confidence).replace("%", "")
+    );
+
+    // If confidence is invalid
+    if (Number.isNaN(confidence)) {
+      confidence = 0;
+    }
+
+    // Keep confidence between 0 and 100
+    confidence = Math.min(
+      Math.max(confidence, 0),
+      100
+    );
+
+    console.log("Gemini Confidence:", result.confidence);
+    console.log("MongoDB Confidence:", confidence);
+
 
     // ===============================
     // Save Disease History
@@ -127,12 +169,13 @@ If the plant is healthy, return:
       farmer: req.user.id,
       crop: "Unknown",
       disease: result.disease,
-      confidence: result.confidence,
+      confidence: confidence,
       severity: result.severity,
       recommendation: result.treatment?.join(" ") || "",
     });
 
     console.log("Disease scan saved successfully.");
+
 
     // ===============================
     // Send Result to Frontend
@@ -144,6 +187,7 @@ If the plant is healthy, return:
     });
 
   } catch (err) {
+
     console.error("Gemini Error:");
     console.error(err);
 
@@ -158,8 +202,10 @@ If the plant is healthy, return:
 // ===============================
 // Get Disease History
 // ===============================
+
 const getDiseaseHistory = async (req, res) => {
   try {
+
     const history = await DiseaseScan.find({
       farmer: req.user.id,
     }).sort({
@@ -172,6 +218,7 @@ const getDiseaseHistory = async (req, res) => {
     });
 
   } catch (err) {
+
     console.error("History Error:");
     console.error(err);
 
