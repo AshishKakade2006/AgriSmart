@@ -1,5 +1,4 @@
 const { GoogleGenAI } = require("@google/genai");
-
 const DiseaseScan = require("../models/DiseaseScan");
 
 console.log(
@@ -11,6 +10,132 @@ const ai = new GoogleGenAI({
   apiKey: process.env.GEMINI_API_KEY,
 });
 
+// ======================================================
+// HELPER: WAIT
+// ======================================================
+
+const wait = (ms) =>
+  new Promise((resolve) => setTimeout(resolve, ms));
+
+// ======================================================
+// HELPER: CALL GEMINI WITH RETRY
+// ======================================================
+
+const generateGeminiResponse = async (contents) => {
+  const model = "gemini-flash-latest";
+
+  let lastError = null;
+
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    try {
+      console.log(
+        `Calling Gemini - attempt ${attempt}`
+      );
+
+      const response =
+        await ai.models.generateContent({
+          model,
+          contents,
+        });
+
+      console.log(
+        "Gemini response received successfully."
+      );
+
+      return response;
+    } catch (error) {
+      lastError = error;
+
+      console.error(
+        `Gemini attempt ${attempt} failed`
+      );
+
+      console.error(
+        "Status:",
+        error.status
+      );
+
+      console.error(
+        "Message:",
+        error.message
+      );
+
+      // Retry temporary Gemini errors
+      if (
+        error.status === 503 ||
+        error.status === 429
+      ) {
+        if (attempt < 3) {
+          const delay = attempt * 2000;
+
+          console.log(
+            `Retrying Gemini after ${delay}ms...`
+          );
+
+          await wait(delay);
+          continue;
+        }
+      }
+
+      // Do not retry other errors
+      throw error;
+    }
+  }
+
+  throw lastError;
+};
+
+// ======================================================
+// HELPER: EXTRACT JSON FROM GEMINI RESPONSE
+// ======================================================
+
+const extractJSON = (text) => {
+  let cleaned = String(text).trim();
+
+  // Remove ```json
+  cleaned = cleaned.replace(
+    /^```json\s*/i,
+    ""
+  );
+
+  // Remove ```
+  cleaned = cleaned.replace(
+    /^```\s*/i,
+    ""
+  );
+
+  cleaned = cleaned.replace(
+    /\s*```$/i,
+    ""
+  );
+
+  cleaned = cleaned.trim();
+
+  // Sometimes Gemini may return extra text.
+  // Try to extract the JSON object.
+  const start = cleaned.indexOf("{");
+  const end = cleaned.lastIndexOf("}");
+
+  if (start !== -1 && end !== -1 && end > start) {
+    cleaned = cleaned.substring(
+      start,
+      end + 1
+    );
+  }
+
+  try {
+    return JSON.parse(cleaned);
+  } catch (error) {
+    console.error(
+      "Failed JSON:",
+      cleaned
+    );
+
+    throw new Error(
+      "Gemini returned an invalid JSON response."
+    );
+  }
+};
 
 // ======================================================
 // DETECT DISEASE
@@ -18,7 +143,6 @@ const ai = new GoogleGenAI({
 
 const detectDisease = async (req, res) => {
   try {
-
     // --------------------------------------------------
     // 1. Check image
     // --------------------------------------------------
@@ -30,20 +154,40 @@ const detectDisease = async (req, res) => {
       });
     }
 
-    console.log("Uploaded file:", req.file.originalname);
-    console.log("Mimetype:", req.file.mimetype);
-    console.log("Size:", req.file.size);
+    console.log(
+      "Uploaded file:",
+      req.file.originalname
+    );
 
+    console.log(
+      "Mimetype:",
+      req.file.mimetype
+    );
+
+    console.log(
+      "Size:",
+      req.file.size
+    );
 
     // --------------------------------------------------
-    // 2. Prepare image
+    // 2. Check authenticated user
+    // --------------------------------------------------
+
+    if (!req.user || !req.user.id) {
+      return res.status(401).json({
+        success: false,
+        message: "Unauthorized.",
+      });
+    }
+
+    // --------------------------------------------------
+    // 3. Prepare image
     // --------------------------------------------------
 
     const imageBuffer = req.file.buffer;
 
-
     // --------------------------------------------------
-    // 3. Gemini Prompt
+    // 4. Gemini prompt
     // --------------------------------------------------
 
     const prompt = `
@@ -75,6 +219,7 @@ Use exactly this structure:
 }
 
 IMPORTANT:
+
 - confidence must be a percentage string such as "94%"
 - severity must be exactly one of: "Low", "Medium", "High", "None"
 - treatment must always be an array
@@ -92,13 +237,12 @@ If the plant is healthy, return:
 }
 `;
 
-
     // --------------------------------------------------
-    // 4. Call Gemini
+    // 5. Prepare Gemini contents
     // --------------------------------------------------
 
     const response = await ai.models.generateContent({
-      model: "gemini-2.5-flash",
+      model: "gemini-3.7-flash",
 
       contents: [
         {
@@ -116,75 +260,37 @@ If the plant is healthy, return:
 
 
     // --------------------------------------------------
-    // 5. Get Gemini response
+    // 7. Get Gemini response
     // --------------------------------------------------
 
     const text = response.text;
 
-    console.log("Raw Gemini Response:");
+    console.log(
+      "Raw Gemini Response:"
+    );
+
     console.log(text);
 
-
     if (!text) {
-      throw new Error("Gemini returned an empty response.");
-    }
-
-
-    // --------------------------------------------------
-    // 6. Clean Gemini response
-    // --------------------------------------------------
-
-    let cleanedText = text.trim();
-
-    // Remove ```json
-    cleanedText = cleanedText.replace(
-      /^```json\s*/i,
-      ""
-    );
-
-    // Remove ```
-    cleanedText = cleanedText.replace(
-      /^```\s*/i,
-      ""
-    );
-
-    cleanedText = cleanedText.replace(
-      /\s*```$/i,
-      ""
-    );
-
-    cleanedText = cleanedText.trim();
-
-
-    console.log("Cleaned Gemini Response:");
-    console.log(cleanedText);
-
-
-    // --------------------------------------------------
-    // 7. Parse JSON
-    // --------------------------------------------------
-
-    let result;
-
-    try {
-
-      result = JSON.parse(cleanedText);
-
-    } catch (parseError) {
-
-      console.error(
-        "JSON Parse Error:",
-        parseError
-      );
-
       throw new Error(
-        "Gemini returned an invalid JSON response."
+        "Gemini returned an empty response."
       );
     }
 
+    // --------------------------------------------------
+    // 8. Parse JSON
+    // --------------------------------------------------
+
+    const result = extractJSON(text);
+
+    console.log(
+      "Parsed Gemini Result:"
+    );
+
+    console.log(result);
 
     // --------------------------------------------------
-    // 8. Normalize Disease
+    // 9. Normalize disease
     // --------------------------------------------------
 
     const disease =
@@ -192,9 +298,8 @@ If the plant is healthy, return:
         ? String(result.disease).trim()
         : "Unknown";
 
-
     // --------------------------------------------------
-    // 9. Normalize Confidence
+    // 10. Normalize confidence
     // --------------------------------------------------
 
     let confidence = 0;
@@ -203,21 +308,8 @@ If the plant is healthy, return:
       result.confidence !== undefined &&
       result.confidence !== null
     ) {
-
       const confidenceString =
         String(result.confidence);
-
-      /*
-        Extract the first number.
-
-        Examples:
-
-        "94%"          -> 94
-        "94"           -> 94
-        94             -> 94
-        "94.5%"        -> 94.5
-        "Approximately 94%" -> 94
-      */
 
       const match =
         confidenceString.match(
@@ -225,25 +317,23 @@ If the plant is healthy, return:
         );
 
       if (match) {
-
         confidence = Number(match[1]);
-
       }
     }
 
-
-    // Make absolutely sure it is a valid number
+    // Make sure confidence is a valid number
     if (!Number.isFinite(confidence)) {
       confidence = 0;
     }
 
-
-    // Keep confidence between 0 and 100
+    // Keep between 0 and 100
     confidence = Math.min(
       Math.max(confidence, 0),
       100
     );
 
+    // Explicitly convert to Number
+    confidence = Number(confidence);
 
     console.log(
       "Gemini confidence:",
@@ -260,16 +350,14 @@ If the plant is healthy, return:
       typeof confidence
     );
 
-
     // --------------------------------------------------
-    // 10. Normalize Severity
+    // 11. Normalize severity
     // --------------------------------------------------
 
     let severity =
       result.severity
         ? String(result.severity).trim()
-        : "Unknown";
-
+        : "None";
 
     const validSeverities = [
       "Low",
@@ -278,13 +366,14 @@ If the plant is healthy, return:
       "None",
     ];
 
-    if (!validSeverities.includes(severity)) {
-      severity = "Unknown";
+    if (
+      !validSeverities.includes(severity)
+    ) {
+      severity = "None";
     }
 
-
     // --------------------------------------------------
-    // 11. Normalize Description
+    // 12. Normalize description
     // --------------------------------------------------
 
     const description =
@@ -292,39 +381,36 @@ If the plant is healthy, return:
         ? String(result.description).trim()
         : "";
 
-
     // --------------------------------------------------
-    // 12. Normalize Treatment
+    // 13. Normalize treatment
     // --------------------------------------------------
 
     let treatment = [];
 
     if (Array.isArray(result.treatment)) {
-
       treatment = result.treatment
         .map((item) => String(item).trim())
-        .filter((item) => item.length > 0);
-
+        .filter(
+          (item) => item.length > 0
+        );
     }
 
-
     // --------------------------------------------------
-    // 13. Normalize Prevention
+    // 14. Normalize prevention
     // --------------------------------------------------
 
     let prevention = [];
 
     if (Array.isArray(result.prevention)) {
-
       prevention = result.prevention
         .map((item) => String(item).trim())
-        .filter((item) => item.length > 0);
-
+        .filter(
+          (item) => item.length > 0
+        );
     }
 
-
     // --------------------------------------------------
-    // 14. Create clean result
+    // 15. Final clean result
     // --------------------------------------------------
 
     const cleanResult = {
@@ -336,30 +422,29 @@ If the plant is healthy, return:
       prevention,
     };
 
-
     console.log(
       "Final Disease Result:"
     );
 
     console.log(cleanResult);
 
+    // --------------------------------------------------
+    // 16. Save to MongoDB
+    // --------------------------------------------------
 
-    // --------------------------------------------------
-    // 15. Save to MongoDB
-    // --------------------------------------------------
+    console.log(
+      "Saving disease scan..."
+    );
 
     const savedScan =
       await DiseaseScan.create({
-
         farmer: req.user.id,
-
         crop: "Unknown",
-
         disease: disease,
 
         // IMPORTANT:
-        // DiseaseScan schema expects Number
-        confidence: confidence,
+        // MongoDB schema expects Number
+        confidence: Number(confidence),
 
         severity: severity,
 
@@ -367,9 +452,7 @@ If the plant is healthy, return:
           treatment.length > 0
             ? treatment.join(" ")
             : "",
-
       });
-
 
     console.log(
       "Disease scan saved successfully."
@@ -380,99 +463,119 @@ If the plant is healthy, return:
       savedScan._id
     );
 
-
     // --------------------------------------------------
-    // 16. Send response to frontend
+    // 17. Send response
     // --------------------------------------------------
 
     return res.status(200).json({
-
       success: true,
-
       result: cleanResult,
-
     });
 
-
   } catch (err) {
-
     console.error(
       "Disease Detection Error:"
     );
 
     console.error(err);
 
+    // Gemini temporary overload
+    if (
+      err.status === 503 ||
+      err.status === 429
+    ) {
+      return res.status(503).json({
+        success: false,
+        message:
+          "AI service is temporarily busy. Please try again in a few seconds.",
+      });
+    }
 
+    // Gemini authentication
+    if (
+      err.status === 401 ||
+      err.status === 403
+    ) {
+      return res.status(500).json({
+        success: false,
+        message:
+          "Gemini API authentication failed. Please check the API key.",
+      });
+    }
+
+    // MongoDB validation error
+    if (
+      err.name === "ValidationError"
+    ) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "Invalid disease data received.",
+      });
+    }
+
+    // General error
     return res.status(500).json({
-
       success: false,
-
       message:
         err.message ||
-        "Disease detection failed",
-
+        "Disease detection failed.",
     });
-
   }
 };
-
 
 // ======================================================
 // GET DISEASE HISTORY
 // ======================================================
 
 const getDiseaseHistory = async (req, res) => {
-
   try {
+    if (!req.user || !req.user.id) {
+      return res.status(401).json({
+        success: false,
+        message: "Unauthorized.",
+      });
+    }
+
+    console.log(
+      "Fetching disease history for:",
+      req.user.id
+    );
 
     const history =
       await DiseaseScan.find({
         farmer: req.user.id,
       })
-      .sort({
-        createdAt: -1,
-      });
-
+        .sort({
+          createdAt: -1,
+        })
+        .lean();
 
     return res.status(200).json({
-
       success: true,
-
       history,
-
     });
 
-
   } catch (err) {
-
     console.error(
       "Disease History Error:"
     );
 
     console.error(err);
 
-
     return res.status(500).json({
-
       success: false,
-
       message:
-        "Failed to fetch disease history",
-
+        "Failed to fetch disease history.",
     });
-
   }
 };
-
 
 // ======================================================
 // EXPORT
 // ======================================================
 
 module.exports = {
-
   detectDisease,
-
   getDiseaseHistory,
-
 };
