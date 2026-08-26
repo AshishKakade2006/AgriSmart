@@ -44,10 +44,13 @@ const Dashboard = () => {
 
   return (
     <DashboardLayout>
-      <div className="space-y-7">
+      <div className="space-y-6">
 
-        {/* ================= HEADER ================= */}
-        <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-4">
+        {/* =====================================================
+            HEADER
+        ===================================================== */}
+        <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4">
+
           <div>
             <p className="text-sm font-medium text-emerald-600 mb-1">
               Farm Overview
@@ -63,17 +66,27 @@ const Dashboard = () => {
           </div>
 
           <div className="flex items-center gap-2 text-sm text-gray-600 bg-white border border-gray-200 rounded-lg px-3 py-2 w-fit">
-            <Leaf size={17} className="text-emerald-600" />
+            <Leaf
+              size={17}
+              className="text-emerald-600"
+            />
+
             <span>Smart Farming</span>
           </div>
+
         </div>
 
-        {/* ================= STAT CARDS ================= */}
+
+        {/* =====================================================
+            STAT CARDS
+        ===================================================== */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
 
           {/* Total Crops */}
           <div className="bg-white border border-gray-200 rounded-xl p-5">
+
             <div className="flex items-start justify-between">
+
               <div>
                 <p className="text-sm text-gray-500">
                   Total Crops
@@ -90,6 +103,7 @@ const Dashboard = () => {
                   className="text-emerald-600"
                 />
               </div>
+
             </div>
 
             <div className="mt-4 pt-3 border-t border-gray-100">
@@ -97,11 +111,15 @@ const Dashboard = () => {
                 Crops currently being managed
               </p>
             </div>
+
           </div>
+
 
           {/* Healthy Crops */}
           <div className="bg-white border border-gray-200 rounded-xl p-5">
+
             <div className="flex items-start justify-between">
+
               <div>
                 <p className="text-sm text-gray-500">
                   Healthy Crops
@@ -118,6 +136,7 @@ const Dashboard = () => {
                   className="text-green-600"
                 />
               </div>
+
             </div>
 
             <div className="mt-4 pt-3 border-t border-gray-100">
@@ -125,11 +144,15 @@ const Dashboard = () => {
                 Crops showing healthy status
               </p>
             </div>
+
           </div>
+
 
           {/* Diseased Crops */}
           <div className="bg-white border border-gray-200 rounded-xl p-5">
+
             <div className="flex items-start justify-between">
+
               <div>
                 <p className="text-sm text-gray-500">
                   Needs Attention
@@ -146,6 +169,7 @@ const Dashboard = () => {
                   className="text-red-500"
                 />
               </div>
+
             </div>
 
             <div className="mt-4 pt-3 border-t border-gray-100">
@@ -153,99 +177,114 @@ const Dashboard = () => {
                 Crops requiring attention
               </p>
             </div>
+
           </div>
+
         </div>
 
-        {/* ================= WEATHER + HARVEST ================= */}
-        <div className="grid grid-cols-1 xl:grid-cols-5 gap-5">
 
-          {/* Weather */}
-          <div className="xl:col-span-3">
-            <WeatherCard />
-          </div>
+        {/* =====================================================
+            WEATHER
+        ===================================================== */}
 
-          {/* Upcoming Harvests */}
-          <div className="xl:col-span-2">
-            <UpcomingHarvests />
-          </div>
+        <div className="w-full">
+          <WeatherCard />
         </div>
 
-        {/* ================= RECENT CROPS ================= */}
-        <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
 
-          {/* Header */}
-          <div className="px-5 sm:px-6 py-5 border-b border-gray-100 flex items-center justify-between">
-            <div>
-              <h2 className="text-lg font-semibold text-gray-900">
-                Recent Crops
-              </h2>
+        {/* =====================================================
+            UPCOMING HARVESTS + RECENT CROPS
+        ===================================================== */}
 
-              <p className="text-sm text-gray-500 mt-1">
-                Recently added crops on your farm
-              </p>
+        <div className="grid grid-cols-1 xl:grid-cols-2 gap-5 items-stretch">
+
+          {/* =================================================
+              UPCOMING HARVESTS
+          ================================================= */}
+
+          <UpcomingHarvests />
+
+
+          {/* =================================================
+              RECENT CROPS
+          ================================================= */}
+
+          <div className="bg-white border border-gray-200 rounded-xl overflow-hidden h-full">
+
+            {/* Header */}
+            <div className="px-6 py-5 border-b border-gray-100 flex items-center justify-between">
+
+              <div>
+                <p className="text-sm font-medium text-emerald-600">
+                  Farm Activity
+                </p>
+
+                <h2 className="text-xl font-semibold text-gray-900 mt-1">
+                  Recent Crops
+                </h2>
+
+                <p className="text-sm text-gray-500 mt-1">
+                  Recently added crops on your farm
+                </p>
+              </div>
+
+              <div className="w-10 h-10 rounded-lg bg-emerald-50 flex items-center justify-center">
+                <Sprout
+                  size={20}
+                  className="text-emerald-600"
+                />
+              </div>
+
             </div>
 
-            <div className="w-9 h-9 rounded-lg bg-emerald-50 flex items-center justify-center">
-              <Sprout
-                size={18}
-                className="text-emerald-600"
-              />
-            </div>
-          </div>
 
-          {/* Crop List */}
-          <div>
+            {/* =================================================
+                EMPTY STATE
+            ================================================= */}
+
             {recentCrops.length === 0 ? (
-              <div className="py-12 px-5 text-center">
-                <div className="w-12 h-12 rounded-full bg-emerald-50 flex items-center justify-center mx-auto">
+
+              <div className="flex flex-col items-center justify-center text-center px-6 py-12">
+
+                <div className="w-11 h-11 rounded-full bg-emerald-50 flex items-center justify-center">
                   <Sprout
-                    size={23}
+                    size={21}
                     className="text-emerald-600"
                   />
                 </div>
 
-                <p className="text-gray-700 font-medium mt-4">
+                <p className="text-sm font-medium text-gray-700 mt-3">
                   No crops added yet
                 </p>
 
-                <p className="text-sm text-gray-400 mt-1">
+                <p className="text-xs text-gray-400 mt-1">
                   Add your first crop to start managing your farm.
                 </p>
+
               </div>
+
             ) : (
-              <>
-                {/* Desktop Header */}
-                <div className="hidden md:grid grid-cols-12 px-6 py-3 bg-gray-50 border-b border-gray-100 text-xs font-medium text-gray-500 uppercase tracking-wide">
-                  <div className="col-span-4">
-                    Crop
-                  </div>
 
-                  <div className="col-span-3">
-                    Location
-                  </div>
+              /* =================================================
+                 CROP LIST
+              ================================================= */
 
-                  <div className="col-span-3">
-                    Expected Harvest
-                  </div>
+              <div className="px-6">
 
-                  <div className="col-span-2 text-right">
-                    Status
-                  </div>
-                </div>
-
-                {/* Rows */}
                 <div className="divide-y divide-gray-100">
+
                   {recentCrops.map((crop) => (
+
                     <div
                       key={crop._id}
-                      className="px-5 sm:px-6 py-4 hover:bg-gray-50 transition"
+                      className="py-4"
                     >
 
-                      {/* Desktop */}
-                      <div className="hidden md:grid grid-cols-12 items-center">
+                      <div className="flex items-center justify-between gap-4">
 
-                        {/* Crop */}
-                        <div className="col-span-4 flex items-center gap-3">
+                        {/* Crop information */}
+                        <div className="flex items-center gap-3 min-w-0">
+
                           <div className="w-9 h-9 rounded-lg bg-emerald-50 flex items-center justify-center flex-shrink-0">
                             <Sprout
                               size={18}
@@ -253,127 +292,76 @@ const Dashboard = () => {
                             />
                           </div>
 
-                          <div>
-                            <p className="font-medium text-gray-800">
+                          <div className="min-w-0">
+
+                            <p className="font-medium text-gray-800 truncate">
                               {crop.cropName}
                             </p>
 
-                            <p className="text-xs text-gray-400 mt-0.5">
-                              Crop
-                            </p>
+                            <div className="flex items-center gap-1.5 mt-1 text-xs text-gray-500">
+
+                              <MapPin size={13} />
+
+                              <span className="truncate">
+                                {crop.location}
+                              </span>
+
+                            </div>
+
                           </div>
+
                         </div>
 
-                        {/* Location */}
-                        <div className="col-span-3">
-                          <div className="flex items-center gap-1.5 text-sm text-gray-600">
-                            <MapPin
-                              size={15}
-                              className="text-gray-400"
-                            />
-                            <span>
-                              {crop.location}
-                            </span>
-                          </div>
-                        </div>
-
-                        {/* Harvest */}
-                        <div className="col-span-3">
-                          <div className="flex items-center gap-1.5 text-sm text-gray-600">
-                            <CalendarDays
-                              size={15}
-                              className="text-gray-400"
-                            />
-
-                            <span>
-                              {new Date(
-                                crop.expectedHarvest
-                              ).toLocaleDateString("en-IN", {
-                                day: "2-digit",
-                                month: "short",
-                                year: "numeric",
-                              })}
-                            </span>
-                          </div>
-                        </div>
 
                         {/* Status */}
-                        <div className="col-span-2 flex justify-end">
-                          <span
-                            className={`text-xs font-medium px-2.5 py-1 rounded-full ${
-                              crop.status === "diseased"
-                                ? "bg-red-50 text-red-600"
-                                : "bg-green-50 text-green-600"
-                            }`}
-                          >
-                            {crop.status === "diseased"
-                              ? "Needs Attention"
-                              : "Healthy"}
-                          </span>
-                        </div>
+                        <span
+                          className={`text-xs font-medium px-2.5 py-1 rounded-full whitespace-nowrap ${
+                            crop.status === "diseased"
+                              ? "bg-red-50 text-red-600"
+                              : "bg-green-50 text-green-600"
+                          }`}
+                        >
+                          {crop.status === "diseased"
+                            ? "Attention"
+                            : "Healthy"}
+                        </span>
+
                       </div>
 
-                      {/* Mobile */}
-                      <div className="md:hidden">
 
-                        <div className="flex items-start justify-between gap-3">
+                      {/* Harvest date */}
+                      <div className="flex items-center gap-1.5 text-xs text-gray-400 mt-3 ml-12">
 
-                          <div className="flex items-center gap-3">
-                            <div className="w-9 h-9 rounded-lg bg-emerald-50 flex items-center justify-center flex-shrink-0">
-                              <Sprout
-                                size={18}
-                                className="text-emerald-600"
-                              />
-                            </div>
+                        <CalendarDays size={13} />
 
-                            <div>
-                              <p className="font-medium text-gray-800">
-                                {crop.cropName}
-                              </p>
-
-                              <div className="flex items-center gap-1 mt-1 text-xs text-gray-500">
-                                <MapPin size={13} />
-                                {crop.location}
-                              </div>
-                            </div>
-                          </div>
-
-                          <span
-                            className={`text-xs font-medium px-2.5 py-1 rounded-full whitespace-nowrap ${
-                              crop.status === "diseased"
-                                ? "bg-red-50 text-red-600"
-                                : "bg-green-50 text-green-600"
-                            }`}
-                          >
-                            {crop.status === "diseased"
-                              ? "Attention"
-                              : "Healthy"}
-                          </span>
-                        </div>
-
-                        <div className="flex items-center gap-1.5 text-xs text-gray-500 mt-4 ml-12">
-                          <CalendarDays size={14} />
-
+                        <span>
                           Expected harvest:
+                        </span>
 
-                          <span className="text-gray-700 font-medium">
-                            {new Date(
-                              crop.expectedHarvest
-                            ).toLocaleDateString("en-IN", {
-                              day: "2-digit",
-                              month: "short",
-                              year: "numeric",
-                            })}
-                          </span>
-                        </div>
+                        <span className="text-gray-600 font-medium">
+                          {new Date(
+                            crop.expectedHarvest
+                          ).toLocaleDateString("en-IN", {
+                            day: "2-digit",
+                            month: "short",
+                            year: "numeric",
+                          })}
+                        </span>
 
                       </div>
+
                     </div>
+
                   ))}
+
                 </div>
-              </>
+
+              </div>
+
             )}
+
           </div>
+
         </div>
 
       </div>
