@@ -29,6 +29,8 @@ const onSubmit = async (data) => {
 
     toast.success(res.data.message);
 
+    toast.dismiss();
+
     setTimeout(() => {
       navigate("/");
     }, 1000);
@@ -83,7 +85,7 @@ const onSubmit = async (data) => {
         >
 
           <h2 className="text-3xl font-bold text-slate-800">
-            Welcome Back 👋
+            Welcome Back 
           </h2>
 
           <p className="text-slate-500 mt-2">
