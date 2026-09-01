@@ -242,7 +242,7 @@ If the plant is healthy, return:
     // --------------------------------------------------
 
     const response = await ai.models.generateContent({
-      model: "gemini-3.7-flash",
+      model: "gemini-flash-latest",
 
       contents: [
         {
