@@ -21,65 +21,76 @@ const wait = (ms) =>
 // HELPER: CALL GEMINI WITH RETRY
 // ======================================================
 
-const generateGeminiResponse = async (contents) => {
-  const model = "gemini-flash-latest";
+// ======================================================
+// HELPER: CALL GEMINI WITH RETRY + MODEL FALLBACK
+// ======================================================
 
+const GEMINI_MODELS = [
+  "gemini-3.6-flash",
+  "gemini-flash-latest",
+  "gemini-2.5-flash",
+];
+
+const generateGeminiResponse = async (contents) => {
   let lastError = null;
 
-  for (let attempt = 1; attempt <= 3; attempt++) {
-    try {
-      console.log(
-        `Calling Gemini - attempt ${attempt}`
-      );
+  for (const model of GEMINI_MODELS) {
+    console.log(`\nTrying Gemini model: ${model}`);
 
-      const response =
-        await ai.models.generateContent({
+    // Retry each model up to 2 times
+    for (let attempt = 1; attempt <= 2; attempt++) {
+      try {
+        console.log(
+          `Calling ${model} - attempt ${attempt}`
+        );
+
+        const response = await ai.models.generateContent({
           model,
           contents,
         });
 
-      console.log(
-        "Gemini response received successfully."
-      );
+        console.log(
+          `Gemini success with model: ${model}`
+        );
 
-      return response;
-    } catch (error) {
-      lastError = error;
+        return {
+          response,
+          modelUsed: model,
+        };
 
-      console.error(
-        `Gemini attempt ${attempt} failed`
-      );
+      } catch (error) {
+        lastError = error;
 
-      console.error(
-        "Status:",
-        error.status
-      );
+        console.error(
+          `${model} attempt ${attempt} failed`
+        );
 
-      console.error(
-        "Message:",
-        error.message
-      );
+        console.error("Status:", error.status);
+        console.error("Message:", error.message);
 
-      // Retry temporary Gemini errors
-      if (
-        error.status === 503 ||
-        error.status === 429
-      ) {
-        if (attempt < 3) {
+        // Retry temporary errors
+        if (
+          (error.status === 503 || error.status === 429) &&
+          attempt < 2
+        ) {
           const delay = attempt * 2000;
 
           console.log(
-            `Retrying Gemini after ${delay}ms...`
+            `Retrying ${model} after ${delay}ms...`
           );
 
           await wait(delay);
           continue;
         }
-      }
 
-      // Do not retry other errors
-      throw error;
+        // Move to next model
+        break;
+      }
     }
+
+    console.log(
+      `Model ${model} unavailable. Trying next model...`
+    );
   }
 
   throw lastError;
@@ -241,22 +252,20 @@ If the plant is healthy, return:
     // 5. Prepare Gemini contents
     // --------------------------------------------------
 
-    const response = await ai.models.generateContent({
-      model: "gemini-3.6-flash",
+    const { response, modelUsed } =
+  await generateGeminiResponse([
+    {
+      text: prompt,
+    },
+    {
+      inlineData: {
+        mimeType: req.file.mimetype,
+        data: imageBuffer.toString("base64"),
+      },
+    },
+  ]);
 
-      contents: [
-        {
-          text: prompt,
-        },
-
-        {
-          inlineData: {
-            mimeType: req.file.mimetype,
-            data: imageBuffer.toString("base64"),
-          },
-        },
-      ],
-    });
+console.log("Model actually used:", modelUsed);
 
 
     // --------------------------------------------------
