@@ -1,14 +1,48 @@
 const { GoogleGenAI } = require("@google/genai");
+const OpenAI = require("openai");
+const Anthropic = require("@anthropic-ai/sdk");
 const DiseaseScan = require("../models/DiseaseScan");
+
+// ======================================================
+// API CLIENTS
+// ======================================================
 
 console.log(
   "Gemini Key exists:",
   !!process.env.GEMINI_API_KEY
 );
 
-const ai = new GoogleGenAI({
-  apiKey: process.env.GEMINI_API_KEY,
-});
+console.log(
+  "OpenAI Key exists:",
+  !!process.env.OPENAI_API_KEY
+);
+
+console.log(
+  "Anthropic Key exists:",
+  !!process.env.ANTHROPIC_API_KEY
+);
+
+// Gemini
+const ai = process.env.GEMINI_API_KEY
+  ? new GoogleGenAI({
+      apiKey: process.env.GEMINI_API_KEY,
+    })
+  : null;
+
+// OpenAI
+const openai = process.env.OPENAI_API_KEY
+  ? new OpenAI({
+      apiKey: process.env.OPENAI_API_KEY,
+    })
+  : null;
+
+// Anthropic / Claude
+const anthropic = process.env.ANTHROPIC_API_KEY
+  ? new Anthropic({
+      apiKey: process.env.ANTHROPIC_API_KEY,
+    })
+  : null;
+
 
 // ======================================================
 // HELPER: WAIT
@@ -17,87 +51,30 @@ const ai = new GoogleGenAI({
 const wait = (ms) =>
   new Promise((resolve) => setTimeout(resolve, ms));
 
-// ======================================================
-// HELPER: CALL GEMINI WITH RETRY
-// ======================================================
 
 // ======================================================
-// HELPER: CALL GEMINI WITH RETRY + MODEL FALLBACK
+// HELPER: TIMEOUT
 // ======================================================
 
-const GEMINI_MODELS = [
-  "gemini-3.6-flash",
-  "gemini-flash-latest",
-  "gemini-2.5-flash",
-];
+const withTimeout = (promise, timeout = 20000) => {
+  return Promise.race([
+    promise,
 
-const generateGeminiResponse = async (contents) => {
-  let lastError = null;
-
-  for (const model of GEMINI_MODELS) {
-    console.log(`\nTrying Gemini model: ${model}`);
-
-    // Retry each model up to 2 times
-    for (let attempt = 1; attempt <= 2; attempt++) {
-      try {
-        console.log(
-          `Calling ${model} - attempt ${attempt}`
+    new Promise((_, reject) => {
+      setTimeout(() => {
+        reject(
+          new Error(
+            `AI request timed out after ${timeout / 1000} seconds.`
+          )
         );
-
-        const response = await ai.models.generateContent({
-          model,
-          contents,
-        });
-
-        console.log(
-          `Gemini success with model: ${model}`
-        );
-
-        return {
-          response,
-          modelUsed: model,
-        };
-
-      } catch (error) {
-        lastError = error;
-
-        console.error(
-          `${model} attempt ${attempt} failed`
-        );
-
-        console.error("Status:", error.status);
-        console.error("Message:", error.message);
-
-        // Retry temporary errors
-        if (
-          (error.status === 503 || error.status === 429) &&
-          attempt < 2
-        ) {
-          const delay = attempt * 2000;
-
-          console.log(
-            `Retrying ${model} after ${delay}ms...`
-          );
-
-          await wait(delay);
-          continue;
-        }
-
-        // Move to next model
-        break;
-      }
-    }
-
-    console.log(
-      `Model ${model} unavailable. Trying next model...`
-    );
-  }
-
-  throw lastError;
+      }, timeout);
+    }),
+  ]);
 };
 
+
 // ======================================================
-// HELPER: EXTRACT JSON FROM GEMINI RESPONSE
+// HELPER: EXTRACT JSON
 // ======================================================
 
 const extractJSON = (text) => {
@@ -115,6 +92,7 @@ const extractJSON = (text) => {
     ""
   );
 
+  // Remove closing ```
   cleaned = cleaned.replace(
     /\s*```$/i,
     ""
@@ -122,12 +100,16 @@ const extractJSON = (text) => {
 
   cleaned = cleaned.trim();
 
-  // Sometimes Gemini may return extra text.
-  // Try to extract the JSON object.
+  // Sometimes AI returns explanation before/after JSON.
+  // Extract the JSON object.
   const start = cleaned.indexOf("{");
   const end = cleaned.lastIndexOf("}");
 
-  if (start !== -1 && end !== -1 && end > start) {
+  if (
+    start !== -1 &&
+    end !== -1 &&
+    end > start
+  ) {
     cleaned = cleaned.substring(
       start,
       end + 1
@@ -138,22 +120,575 @@ const extractJSON = (text) => {
     return JSON.parse(cleaned);
   } catch (error) {
     console.error(
-      "Failed JSON:",
-      cleaned
+      "Failed to parse AI JSON:"
     );
 
+    console.error(cleaned);
+
     throw new Error(
-      "Gemini returned an invalid JSON response."
+      "AI returned invalid JSON."
     );
   }
 };
+
+
+// ======================================================
+// HELPER: VALIDATE AI RESULT
+// ======================================================
+
+const validateAIResult = (text) => {
+  if (!text || !String(text).trim()) {
+    throw new Error(
+      "AI returned an empty response."
+    );
+  }
+
+  const result = extractJSON(text);
+
+  // Make sure the important fields exist
+  if (!result || typeof result !== "object") {
+    throw new Error(
+      "AI returned an invalid result."
+    );
+  }
+
+  if (!result.disease) {
+    throw new Error(
+      "AI response does not contain disease."
+    );
+  }
+
+  return result;
+};
+
+
+// ======================================================
+// GEMINI
+// ======================================================
+
+const generateWithGemini = async (
+  prompt,
+  imageBase64,
+  mimeType
+) => {
+  if (!ai) {
+    throw new Error(
+      "Gemini API key is not configured."
+    );
+  }
+
+  // Current Gemini models.
+  // Primary first, fallback second.
+  const models = [
+    "gemini-3.7-flash",
+    "gemini-3.6-flash",
+    "gemini-3.5-flash-lite",
+  ];
+
+  let lastError = null;
+
+  for (const model of models) {
+    console.log(
+      `\nTrying Gemini model: ${model}`
+    );
+
+    // Two attempts per model
+    for (let attempt = 1; attempt <= 2; attempt++) {
+      try {
+        console.log(
+          `Gemini ${model} - attempt ${attempt}`
+        );
+
+        const response =
+          await withTimeout(
+            ai.models.generateContent({
+              model,
+
+              contents: [
+                {
+                  text: prompt,
+                },
+
+                {
+                  inlineData: {
+                    mimeType,
+                    data: imageBase64,
+                  },
+                },
+              ],
+            }),
+            20000
+          );
+
+        const text = response.text;
+
+        // Validate BEFORE accepting this provider
+        validateAIResult(text);
+
+        console.log(
+          `Gemini succeeded using ${model}`
+        );
+
+        return {
+          text,
+          provider: "Gemini",
+          model,
+        };
+
+      } catch (error) {
+        lastError = error;
+
+        console.error(
+          `Gemini ${model} failed.`
+        );
+
+        console.error(
+          "Status:",
+          error.status || "N/A"
+        );
+
+        console.error(
+          "Message:",
+          error.message
+        );
+
+        // Retry only temporary errors
+        const isTemporary =
+          error.status === 429 ||
+          error.status === 500 ||
+          error.status === 502 ||
+          error.status === 503 ||
+          error.status === 504 ||
+          error.message
+            ?.toLowerCase()
+            .includes("timeout");
+
+        if (
+          isTemporary &&
+          attempt < 2
+        ) {
+          const delay = attempt * 1500;
+
+          console.log(
+            `Retrying Gemini after ${delay}ms...`
+          );
+
+          await wait(delay);
+        } else {
+          break;
+        }
+      }
+    }
+
+    console.log(
+      `Moving to next Gemini model...`
+    );
+  }
+
+  throw lastError ||
+    new Error(
+      "All Gemini models failed."
+    );
+};
+
+
+// ======================================================
+// OPENAI
+// ======================================================
+
+const generateWithOpenAI = async (
+  prompt,
+  imageBase64,
+  mimeType
+) => {
+  if (!openai) {
+    throw new Error(
+      "OpenAI API key is not configured."
+    );
+  }
+
+  const model = "gpt-5.6-luna";
+
+  let lastError = null;
+
+  for (let attempt = 1; attempt <= 2; attempt++) {
+    try {
+      console.log(
+        `\nTrying OpenAI - attempt ${attempt}`
+      );
+
+      const response =
+        await withTimeout(
+          openai.responses.create({
+            model,
+
+            input: [
+              {
+                role: "user",
+
+                content: [
+                  {
+                    type: "input_text",
+                    text: prompt,
+                  },
+
+                  {
+                    type: "input_image",
+
+                    image_url:
+                      `data:${mimeType};base64,${imageBase64}`,
+                  },
+                ],
+              },
+            ],
+          }),
+          20000
+        );
+
+      const text =
+        response.output_text;
+
+      // Validate BEFORE accepting OpenAI
+      validateAIResult(text);
+
+      console.log(
+        `OpenAI succeeded using ${model}`
+      );
+
+      return {
+        text,
+        provider: "OpenAI",
+        model,
+      };
+
+    } catch (error) {
+      lastError = error;
+
+      console.error(
+        `OpenAI attempt ${attempt} failed.`
+      );
+
+      console.error(
+        "Status:",
+        error.status || "N/A"
+      );
+
+      console.error(
+        "Message:",
+        error.message
+      );
+
+      const isTemporary =
+        error.status === 429 ||
+        error.status === 500 ||
+        error.status === 502 ||
+        error.status === 503 ||
+        error.status === 504 ||
+        error.message
+          ?.toLowerCase()
+          .includes("timeout");
+
+      if (
+        isTemporary &&
+        attempt < 2
+      ) {
+        const delay = attempt * 1500;
+
+        console.log(
+          `Retrying OpenAI after ${delay}ms...`
+        );
+
+        await wait(delay);
+      } else {
+        break;
+      }
+    }
+  }
+
+  throw lastError ||
+    new Error(
+      "OpenAI failed."
+    );
+};
+
+
+// ======================================================
+// CLAUDE
+// ======================================================
+
+const generateWithClaude = async (
+  prompt,
+  imageBase64,
+  mimeType
+) => {
+  if (!anthropic) {
+    throw new Error(
+      "Anthropic API key is not configured."
+    );
+  }
+
+  const model = "claude-sonnet-5";
+
+  let lastError = null;
+
+  for (let attempt = 1; attempt <= 2; attempt++) {
+    try {
+      console.log(
+        `\nTrying Claude - attempt ${attempt}`
+      );
+
+      const response =
+        await withTimeout(
+          anthropic.messages.create({
+            model,
+
+            max_tokens: 2000,
+
+            messages: [
+              {
+                role: "user",
+
+                content: [
+                  {
+                    type: "image",
+
+                    source: {
+                      type: "base64",
+                      media_type: mimeType,
+                      data: imageBase64,
+                    },
+                  },
+
+                  {
+                    type: "text",
+                    text: prompt,
+                  },
+                ],
+              },
+            ],
+          }),
+          20000
+        );
+
+      const textBlock =
+        response.content?.find(
+          (block) =>
+            block.type === "text"
+        );
+
+      const text =
+        textBlock?.text;
+
+      // Validate BEFORE accepting Claude
+      validateAIResult(text);
+
+      console.log(
+        `Claude succeeded using ${model}`
+      );
+
+      return {
+        text,
+        provider: "Claude",
+        model,
+      };
+
+    } catch (error) {
+      lastError = error;
+
+      console.error(
+        `Claude attempt ${attempt} failed.`
+      );
+
+      console.error(
+        "Status:",
+        error.status || "N/A"
+      );
+
+      console.error(
+        "Message:",
+        error.message
+      );
+
+      const isTemporary =
+        error.status === 429 ||
+        error.status === 500 ||
+        error.status === 502 ||
+        error.status === 503 ||
+        error.status === 504 ||
+        error.message
+          ?.toLowerCase()
+          .includes("timeout");
+
+      if (
+        isTemporary &&
+        attempt < 2
+      ) {
+        const delay = attempt * 1500;
+
+        console.log(
+          `Retrying Claude after ${delay}ms...`
+        );
+
+        await wait(delay);
+      } else {
+        break;
+      }
+    }
+  }
+
+  throw lastError ||
+    new Error(
+      "Claude failed."
+    );
+};
+
+
+// ======================================================
+// MAIN AI FALLBACK
+//
+// Gemini
+//    ↓
+// OpenAI
+//    ↓
+// Claude
+// ======================================================
+
+const generateAIResponse = async (
+  prompt,
+  imageBuffer,
+  mimeType
+) => {
+  const imageBase64 =
+    imageBuffer.toString("base64");
+
+  let errors = [];
+
+  // ====================================================
+  // 1. GEMINI
+  // ====================================================
+
+  try {
+    const result =
+      await generateWithGemini(
+        prompt,
+        imageBase64,
+        mimeType
+      );
+
+    return result;
+
+  } catch (error) {
+    console.error(
+      "\nGemini completely failed."
+    );
+
+    console.error(
+      error.message
+    );
+
+    errors.push({
+      provider: "Gemini",
+      error: error.message,
+    });
+  }
+
+
+  // ====================================================
+  // 2. OPENAI
+  // ====================================================
+
+  try {
+    const result =
+      await generateWithOpenAI(
+        prompt,
+        imageBase64,
+        mimeType
+      );
+
+    return result;
+
+  } catch (error) {
+    console.error(
+      "\nOpenAI completely failed."
+    );
+
+    console.error(
+      error.message
+    );
+
+    errors.push({
+      provider: "OpenAI",
+      error: error.message,
+    });
+  }
+
+
+  // ====================================================
+  // 3. CLAUDE
+  // ====================================================
+
+  try {
+    const result =
+      await generateWithClaude(
+        prompt,
+        imageBase64,
+        mimeType
+      );
+
+    return result;
+
+  } catch (error) {
+    console.error(
+      "\nClaude completely failed."
+    );
+
+    console.error(
+      error.message
+    );
+
+    errors.push({
+      provider: "Claude",
+      error: error.message,
+    });
+  }
+
+
+  // ====================================================
+  // ALL PROVIDERS FAILED
+  // ====================================================
+
+  console.error(
+    "\n================================="
+  );
+
+  console.error(
+    "ALL AI PROVIDERS FAILED"
+  );
+
+  console.error(
+    "================================="
+  );
+
+  console.error(
+    errors
+  );
+
+  throw new Error(
+    "All AI providers are currently unavailable."
+  );
+};
+
 
 // ======================================================
 // DETECT DISEASE
 // ======================================================
 
-const detectDisease = async (req, res) => {
+const detectDisease = async (
+  req,
+  res
+) => {
   try {
+
     // --------------------------------------------------
     // 1. Check image
     // --------------------------------------------------
@@ -161,7 +696,8 @@ const detectDisease = async (req, res) => {
     if (!req.file) {
       return res.status(400).json({
         success: false,
-        message: "Please upload an image.",
+        message:
+          "Please upload an image.",
       });
     }
 
@@ -180,31 +716,40 @@ const detectDisease = async (req, res) => {
       req.file.size
     );
 
+
     // --------------------------------------------------
     // 2. Check authenticated user
     // --------------------------------------------------
 
-    if (!req.user || !req.user.id) {
+    if (
+      !req.user ||
+      !req.user.id
+    ) {
       return res.status(401).json({
         success: false,
         message: "Unauthorized.",
       });
     }
 
+
     // --------------------------------------------------
     // 3. Prepare image
     // --------------------------------------------------
 
-    const imageBuffer = req.file.buffer;
+    const imageBuffer =
+      req.file.buffer;
+
 
     // --------------------------------------------------
-    // 4. Gemini prompt
+    // 4. AI PROMPT
     // --------------------------------------------------
 
     const prompt = `
-You are an expert agricultural scientist.
+You are an expert agricultural scientist specializing in crop disease detection.
 
-Analyze the crop image carefully and identify any visible plant disease.
+Analyze the provided crop/plant image carefully.
+
+Identify the most likely visible plant disease.
 
 Return ONLY a valid JSON object.
 
@@ -232,9 +777,14 @@ Use exactly this structure:
 IMPORTANT:
 
 - confidence must be a percentage string such as "94%"
-- severity must be exactly one of: "Low", "Medium", "High", "None"
+- confidence should be between 0% and 100%
+- severity must be exactly one of:
+  "Low", "Medium", "High", "None"
 - treatment must always be an array
 - prevention must always be an array
+- disease must always contain a meaningful disease name
+- Do not invent symptoms that are not visible in the image
+- If the image does not clearly show a disease, say "Unknown" and explain that the image is inconclusive
 
 If the plant is healthy, return:
 
@@ -248,77 +798,106 @@ If the plant is healthy, return:
 }
 `;
 
-    // --------------------------------------------------
-    // 5. Prepare Gemini contents
-    // --------------------------------------------------
-
-    const { response, modelUsed } =
-  await generateGeminiResponse([
-    {
-      text: prompt,
-    },
-    {
-      inlineData: {
-        mimeType: req.file.mimetype,
-        data: imageBuffer.toString("base64"),
-      },
-    },
-  ]);
-
-console.log("Model actually used:", modelUsed);
-
 
     // --------------------------------------------------
-    // 7. Get Gemini response
+    // 5. MULTI-AI ANALYSIS
     // --------------------------------------------------
-
-    const text = response.text;
 
     console.log(
-      "Raw Gemini Response:"
+      "\n================================="
+    );
+
+    console.log(
+      "Starting multi-AI disease detection"
+    );
+
+    console.log(
+      "Priority: Gemini -> OpenAI -> Claude"
+    );
+
+    console.log(
+      "=================================\n"
+    );
+
+    const aiResult =
+      await generateAIResponse(
+        prompt,
+        imageBuffer,
+        req.file.mimetype
+      );
+
+
+    // --------------------------------------------------
+    // 6. Get AI response
+    // --------------------------------------------------
+
+    const text =
+      aiResult.text;
+
+    const provider =
+      aiResult.provider;
+
+    const model =
+      aiResult.model;
+
+    console.log(
+      "\nAI Provider Used:",
+      provider
+    );
+
+    console.log(
+      "AI Model Used:",
+      model
+    );
+
+    console.log(
+      "Raw AI Response:"
     );
 
     console.log(text);
 
-    if (!text) {
-      throw new Error(
-        "Gemini returned an empty response."
-      );
-    }
 
     // --------------------------------------------------
-    // 8. Parse JSON
+    // 7. Parse JSON
     // --------------------------------------------------
 
-    const result = extractJSON(text);
+    const result =
+      extractJSON(text);
 
     console.log(
-      "Parsed Gemini Result:"
+      "Parsed AI Result:"
     );
 
     console.log(result);
 
+
     // --------------------------------------------------
-    // 9. Normalize disease
+    // 8. Normalize disease
     // --------------------------------------------------
 
     const disease =
       result.disease
-        ? String(result.disease).trim()
+        ? String(
+            result.disease
+          ).trim()
         : "Unknown";
 
+
     // --------------------------------------------------
-    // 10. Normalize confidence
+    // 9. Normalize confidence
     // --------------------------------------------------
 
     let confidence = 0;
 
     if (
-      result.confidence !== undefined &&
+      result.confidence !==
+        undefined &&
       result.confidence !== null
     ) {
       const confidenceString =
-        String(result.confidence);
+        String(
+          result.confidence
+        );
 
       const match =
         confidenceString.match(
@@ -326,26 +905,40 @@ console.log("Model actually used:", modelUsed);
         );
 
       if (match) {
-        confidence = Number(match[1]);
+        confidence =
+          Number(match[1]);
       }
     }
 
-    // Make sure confidence is a valid number
-    if (!Number.isFinite(confidence)) {
+
+    // Make sure confidence is valid
+    if (
+      !Number.isFinite(
+        confidence
+      )
+    ) {
       confidence = 0;
     }
 
+
     // Keep between 0 and 100
-    confidence = Math.min(
-      Math.max(confidence, 0),
-      100
-    );
+    confidence =
+      Math.min(
+        Math.max(
+          confidence,
+          0
+        ),
+        100
+      );
+
 
     // Explicitly convert to Number
-    confidence = Number(confidence);
+    confidence =
+      Number(confidence);
+
 
     console.log(
-      "Gemini confidence:",
+      "AI confidence:",
       result.confidence
     );
 
@@ -359,14 +952,18 @@ console.log("Model actually used:", modelUsed);
       typeof confidence
     );
 
+
     // --------------------------------------------------
-    // 11. Normalize severity
+    // 10. Normalize severity
     // --------------------------------------------------
 
     let severity =
       result.severity
-        ? String(result.severity).trim()
+        ? String(
+            result.severity
+          ).trim()
         : "None";
+
 
     const validSeverities = [
       "Low",
@@ -375,85 +972,118 @@ console.log("Model actually used:", modelUsed);
       "None",
     ];
 
+
     if (
-      !validSeverities.includes(severity)
+      !validSeverities.includes(
+        severity
+      )
     ) {
       severity = "None";
     }
 
+
     // --------------------------------------------------
-    // 12. Normalize description
+    // 11. Normalize description
     // --------------------------------------------------
 
     const description =
       result.description
-        ? String(result.description).trim()
+        ? String(
+            result.description
+          ).trim()
         : "";
 
+
     // --------------------------------------------------
-    // 13. Normalize treatment
+    // 12. Normalize treatment
     // --------------------------------------------------
 
     let treatment = [];
 
-    if (Array.isArray(result.treatment)) {
-      treatment = result.treatment
-        .map((item) => String(item).trim())
-        .filter(
-          (item) => item.length > 0
-        );
+    if (
+      Array.isArray(
+        result.treatment
+      )
+    ) {
+      treatment =
+        result.treatment
+          .map((item) =>
+            String(item).trim()
+          )
+          .filter(
+            (item) =>
+              item.length > 0
+          );
     }
 
+
     // --------------------------------------------------
-    // 14. Normalize prevention
+    // 13. Normalize prevention
     // --------------------------------------------------
 
     let prevention = [];
 
-    if (Array.isArray(result.prevention)) {
-      prevention = result.prevention
-        .map((item) => String(item).trim())
-        .filter(
-          (item) => item.length > 0
-        );
+    if (
+      Array.isArray(
+        result.prevention
+      )
+    ) {
+      prevention =
+        result.prevention
+          .map((item) =>
+            String(item).trim()
+          )
+          .filter(
+            (item) =>
+              item.length > 0
+          );
     }
 
+
     // --------------------------------------------------
-    // 15. Final clean result
+    // 14. Final clean result
     // --------------------------------------------------
 
     const cleanResult = {
       disease,
-      confidence: `${confidence}%`,
+      confidence:
+        `${confidence}%`,
       severity,
       description,
       treatment,
       prevention,
     };
 
+
     console.log(
-      "Final Disease Result:"
+      "\nFinal Disease Result:"
     );
 
-    console.log(cleanResult);
+    console.log(
+      cleanResult
+    );
+
 
     // --------------------------------------------------
-    // 16. Save to MongoDB
+    // 15. Save to MongoDB
     // --------------------------------------------------
 
     console.log(
       "Saving disease scan..."
     );
 
+
     const savedScan =
       await DiseaseScan.create({
         farmer: req.user.id,
+
         crop: "Unknown",
+
         disease: disease,
 
-        // IMPORTANT:
         // MongoDB schema expects Number
-        confidence: Number(confidence),
+        confidence:
+          Number(confidence),
 
         severity: severity,
 
@@ -462,6 +1092,7 @@ console.log("Model actually used:", modelUsed);
             ? treatment.join(" ")
             : "",
       });
+
 
     console.log(
       "Disease scan saved successfully."
@@ -472,60 +1103,80 @@ console.log("Model actually used:", modelUsed);
       savedScan._id
     );
 
+
     // --------------------------------------------------
-    // 17. Send response
+    // 16. Send response
     // --------------------------------------------------
 
     return res.status(200).json({
       success: true,
+
       result: cleanResult,
+
+      // Useful for debugging / dashboard
+      aiProvider: provider,
+
+      aiModel: model,
     });
 
   } catch (err) {
+
     console.error(
-      "Disease Detection Error:"
+      "\n================================="
+    );
+
+    console.error(
+      "Disease Detection Error"
+    );
+
+    console.error(
+      "================================="
     );
 
     console.error(err);
 
-    // Gemini temporary overload
+
+    // --------------------------------------------------
+    // All AI providers failed
+    // --------------------------------------------------
+
     if (
-      err.status === 503 ||
-      err.status === 429
+      err.message ===
+      "All AI providers are currently unavailable."
     ) {
       return res.status(503).json({
         success: false,
+
         message:
-          "AI service is temporarily busy. Please try again in a few seconds.",
+          "All AI services are temporarily unavailable. Please try again in a few seconds.",
       });
     }
 
-    // Gemini authentication
-    if (
-      err.status === 401 ||
-      err.status === 403
-    ) {
-      return res.status(500).json({
-        success: false,
-        message:
-          "Gemini API authentication failed. Please check the API key.",
-      });
-    }
 
+    // --------------------------------------------------
     // MongoDB validation error
+    // --------------------------------------------------
+
     if (
-      err.name === "ValidationError"
+      err.name ===
+      "ValidationError"
     ) {
       return res.status(400).json({
         success: false,
+
         message:
           "Invalid disease data received.",
       });
     }
 
+
+    // --------------------------------------------------
     // General error
+    // --------------------------------------------------
+
     return res.status(500).json({
       success: false,
+
       message:
         err.message ||
         "Disease detection failed.",
@@ -533,23 +1184,34 @@ console.log("Model actually used:", modelUsed);
   }
 };
 
+
 // ======================================================
 // GET DISEASE HISTORY
 // ======================================================
 
-const getDiseaseHistory = async (req, res) => {
+const getDiseaseHistory = async (
+  req,
+  res
+) => {
   try {
-    if (!req.user || !req.user.id) {
+
+    if (
+      !req.user ||
+      !req.user.id
+    ) {
       return res.status(401).json({
         success: false,
-        message: "Unauthorized.",
+        message:
+          "Unauthorized.",
       });
     }
+
 
     console.log(
       "Fetching disease history for:",
       req.user.id
     );
+
 
     const history =
       await DiseaseScan.find({
@@ -560,25 +1222,30 @@ const getDiseaseHistory = async (req, res) => {
         })
         .lean();
 
+
     return res.status(200).json({
       success: true,
       history,
     });
 
   } catch (err) {
+
     console.error(
       "Disease History Error:"
     );
 
     console.error(err);
 
+
     return res.status(500).json({
       success: false,
+
       message:
         "Failed to fetch disease history.",
     });
   }
 };
+
 
 // ======================================================
 // EXPORT
